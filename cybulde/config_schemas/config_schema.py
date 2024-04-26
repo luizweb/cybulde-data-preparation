@@ -4,7 +4,8 @@ from pydantic.dataclasses import dataclass
 
 @dataclass
 class Config:
-    helle: str = "world"
+    hello: str = "world"
+
 
 
 def setup_config() -> None:
