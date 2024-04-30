@@ -43,6 +43,7 @@ def process_data(config: DataProcessingConfig) -> None:
     df = dataset_reader_manager.read_data()
 
     print(df.head(10))
+    print(df["dataset_name"].unique().compute())
 
 
 
