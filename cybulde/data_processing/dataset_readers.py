@@ -1,10 +1,13 @@
+import os
+
 from abc import ABC, abstractmethod
 from typing import Optional
-from cybulde.utils.utils import get_logger
-import os
+
 import dask.dataframe as dd
+
 from dask_ml.model_selection import train_test_split
 
+from cybulde.utils.utils import get_logger
 
 
 class DatasetReader(ABC):
@@ -12,11 +15,10 @@ class DatasetReader(ABC):
     split_names = {"train", "dev", "test"}
 
     def __init__(self, dataset_dir: str, dataset_name: str) -> None:
-        self.logger = get_logger(self.__class__.__name__) # utils
+        self.logger = get_logger(self.__class__.__name__)  # utils
         self.dataset_dir = dataset_dir
         self.dataset_name = dataset_name
 
-    
     def read_data(self) -> dd.core.DataFrame:
         train_df, dev_df, test_df = self._read_data()
         df = self.assign_split_names_to_data_frames_and_merge(train_df, dev_df, test_df)
@@ -26,9 +28,8 @@ class DatasetReader(ABC):
         unique_split_names = set(df["split"].unique().compute().tolist())
         if unique_split_names != self.split_names:
             raise ValueError(f"Dataset must contain all requeired split names: {self.split_names}")
-        return df[list(self.required_columns)]
-
-
+        df_final: dd.core.DataFrame = df[list(self.required_columns)] 
+        return df_final
 
     @abstractmethod
     def _read_data(self) -> tuple[dd.core.DataFrame, dd.core.DataFrame, dd.core.DataFrame]:
@@ -39,18 +40,20 @@ class DatasetReader(ABC):
 
         pass
 
-
-    def assign_split_names_to_data_frames_and_merge(self, train_df: dd.core.DataFrame, dev_df: dd.core.DataFrame, test_df: dd.core.DataFrame) -> dd.core.DataFrame:
+    def assign_split_names_to_data_frames_and_merge(
+        self, train_df: dd.core.DataFrame, dev_df: dd.core.DataFrame, test_df: dd.core.DataFrame
+    ) -> dd.core.DataFrame:
         train_df["split"] = "train"
         dev_df["split"] = "dev"
         test_df["split"] = "test"
-        df = dd.concat([train_df, dev_df, test_df])
+        df: dd.core.DataFrame = dd.concat([train_df, dev_df, test_df])
         return df
 
-    
-    def split_dataset(self, df: dd.core.DataFrame, test_size: float, stratify_column: Optional[str]) -> tuple[dd.core.DataFrame, dd.core.DataFrame]:
+    def split_dataset(
+        self, df: dd.core.DataFrame, test_size: float, stratify_column: Optional[str]
+    ) -> tuple[dd.core.DataFrame, dd.core.DataFrame]:
         if stratify_column is None:
-            return train_test_split(df, test_size=test_size, random_state=42, shuffle=True)
+            return train_test_split(df, test_size=test_size, random_state=42, shuffle=True)  # type: ignore
         unique_column_values = df[stratify_column].unique()
         first_dfs = []
         second_dfs = []
@@ -64,17 +67,15 @@ class DatasetReader(ABC):
         second_df = dd.concat(second_dfs)
         return first_df, second_df
 
-       
-
 
 class GHCDatasetReader(DatasetReader):
     def __init__(self, dataset_dir: str, dataset_name: str, dev_split_ratio: float) -> None:
         super().__init__(dataset_dir, dataset_name)
         self.dev_split_ratio = dev_split_ratio
 
-
     def _read_data(self) -> tuple[dd.core.DataFrame, dd.core.DataFrame, dd.core.DataFrame]:
-        self.logger.info("Reading data")
+        self.logger.info(f"Reading {self.__class__.__name__}")
+
         train_tsv_path = os.path.join(self.dataset_dir, "ghc_train.tsv")
         train_df = dd.read_csv(train_tsv_path, sep="\t", header=0)
 
@@ -84,7 +85,7 @@ class GHCDatasetReader(DatasetReader):
         train_df["label"] = (train_df["hd"] + train_df["cv"] + train_df["vo"] > 0).astype(int)
         test_df["label"] = (test_df["hd"] + test_df["cv"] + test_df["vo"] > 0).astype(int)
 
-        train_df, dev_df = self.split_dataset(train_df, self.dev_split_ratio, stratify_column = "label")
+        train_df, dev_df = self.split_dataset(train_df, self.dev_split_ratio, stratify_column="label")
 
         return train_df, dev_df, test_df
 
@@ -95,9 +96,9 @@ class JigsawToxicCommentsDatasetReader(DatasetReader):
         self.dev_split_ratio = dev_split_ratio
         self.columns_for_label = ["toxic", "severe_toxic", "obscene", "threat", "insult", "identity_hate"]
 
-
     def _read_data(self) -> tuple[dd.core.DataFrame, dd.core.DataFrame, dd.core.DataFrame]:
         self.logger.info(f"Reading {self.__class__.__name__}")
+
         test_csv_path = os.path.join(self.dataset_dir, "test.csv")
         test_df = dd.read_csv(test_csv_path)
 
@@ -105,26 +106,41 @@ class JigsawToxicCommentsDatasetReader(DatasetReader):
         test_labels_df = dd.read_csv(test_labels_csv_path)
 
         test_df = test_df.merge(test_labels_df, on="id")
-        test_df = test_df[test_df["toxic"] != -1] # remove rows with -1. See notebook eda.
+        test_df = test_df[test_df["toxic"] != -1]  # remove rows with -1. See notebook eda.
         test_df = self.get_text_and_label_columns(test_df)
 
         train_csv_path = os.path.join(self.dataset_dir, "train.csv")
         train_df = dd.read_csv(train_csv_path)
         train_df = self.get_text_and_label_columns(train_df)
 
-        train_df, dev_df = self.split_dataset(train_df, self.dev_split_ratio, stratify_column = "label")
+        train_df, dev_df = self.split_dataset(train_df, self.dev_split_ratio, stratify_column="label")
 
         return train_df, dev_df, test_df
-         
 
     def get_text_and_label_columns(self, df: dd.core.DataFrame) -> dd.core.DataFrame:
-        df["label"] = (df[self.columns_for_label].sum(axis=1) > 0).astype(int) # convert to binary classification
+        df["label"] = (df[self.columns_for_label].sum(axis=1) > 0).astype(int)  # convert to binary classification
         df = df.rename(columns={"comment_text": "text"})
         return df
 
 
+class TwitterDatasetReader(DatasetReader):
+    def __init__(self, dataset_dir: str, dataset_name: str, dev_split_ratio: float, test_split_ratio: float) -> None:
+        super().__init__(dataset_dir, dataset_name)
+        self.dev_split_ratio = dev_split_ratio
+        self.test_split_ratio = test_split_ratio
 
+    def _read_data(self) -> tuple[dd.core.DataFrame, dd.core.DataFrame, dd.core.DataFrame]:
+        self.logger.info(f"Reading {self.__class__.__name__}")
 
+        train_csv_path = os.path.join(self.dataset_dir, "cyberbullying_tweets.csv")
+        df = dd.read_csv(train_csv_path)
+        df = df.rename(columns={"tweet_text": "text", "cyberbullying_type": "label"})
+        df["label"] = (df["label"] != "not_cyberbullying").astype(int)
+
+        train_df, test_df = self.split_dataset(df, self.test_split_ratio, stratify_column="label")
+        train_df, dev_df = self.split_dataset(train_df, self.dev_split_ratio, stratify_column="label")
+
+        return train_df, dev_df, test_df
 
 
 class DatasetReaderManager:
@@ -133,5 +149,5 @@ class DatasetReaderManager:
 
     def read_data(self) -> dd.core.DataFrame:
         dfs = [dataset_reader.read_data() for dataset_reader in self.dataset_readers.values()]
-        df = dd.concat(dfs)
+        df: dd.core.DataFrame = dd.concat(dfs)
         return df

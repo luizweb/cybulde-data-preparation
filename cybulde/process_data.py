@@ -1,34 +1,33 @@
+from hydra.utils import instantiate
+
 from cybulde.config_schemas.data_processing_config_schema import DataProcessingConfig
 from cybulde.utils.config_utils import get_config
-from cybulde.utils.gcp_utils import access_secret_version
 from cybulde.utils.data_utils import get_raw_data_with_version
-
-from hydra.utils import instantiate
+from cybulde.utils.gcp_utils import access_secret_version
 
 
 @get_config(config_path="../configs", config_name="data_processing_config")
 def process_data(config: DataProcessingConfig) -> None:
-    #print(config)
-    #print(60 * "*")
-    #from omegaconf import OmegaConf
-    #print(OmegaConf.to_yaml(config))
-    #return
+    # print(config)
+    # print(60 * "*")
+    # from omegaconf import OmegaConf
+    # print(OmegaConf.to_yaml(config))
+    # return
 
-    #my_test_secret = access_secret_version("luizweb", "test-secret", "latest")
-    #print(f"My test secret: {my_test_secret}")
+    # my_test_secret = access_secret_version("luizweb", "test-secret", "latest")
+    # print(f"My test secret: {my_test_secret}")
 
-    #github_token = access_secret_version("luizweb", "cybulde-data-github-access-token", "latest")
-    #print(f"Github token: {github_token}")
+    # github_token = access_secret_version("luizweb", "cybulde-data-github-access-token", "latest")
+    # print(f"Github token: {github_token}")
 
-    #version = "v2"
-    #data_local_save_dir = "./data/raw"
-    #dvc_remote_repo = "https://github.com/luizweb/cybulde-data.git"
-    #dvc_data_folder = "data/raw"
-    #github_user_name = "luizweb"
+    # version = "v2"
+    # data_local_save_dir = "./data/raw"
+    # dvc_remote_repo = "https://github.com/luizweb/cybulde-data.git"
+    # dvc_data_folder = "data/raw"
+    # github_user_name = "luizweb"
 
-    #github_access_token = access_secret_version("luizweb", "cybulde-data-github-access-token", "latest")
+    # github_access_token = access_secret_version("luizweb", "cybulde-data-github-access-token", "latest")
     github_access_token = access_secret_version(config.infrastructure.project_id, config.github_access_token_secret_id)
-
 
     get_raw_data_with_version(
         version=config.version,
@@ -40,12 +39,25 @@ def process_data(config: DataProcessingConfig) -> None:
     )
 
     dataset_reader_manager = instantiate(config.dataset_reader_manager)
-    df = dataset_reader_manager.read_data()
+    dataset_cleaner_manager = instantiate(config.dataset_cleaner_manager)
 
-    print(df.head(10))
-    print(df["dataset_name"].unique().compute())
+    # df = dataset_reader_manager.read_data()
+    df = dataset_reader_manager.read_data().compute()
 
+    sample_df = df.sample(n=5)
+
+    for _, row in sample_df.iterrows():
+        text = row["text"]
+        cleaned_text = dataset_cleaner_manager(text)
+
+        print(60 * "#")
+        print(f"Text: {text}")
+        print(f"Cleaned text: {cleaned_text}")
+        print(60 * "#")
+
+    # print(df.head(10))
+    # print(df["dataset_name"].unique().compute())
 
 
 if __name__ == "__main__":
-    process_data()  # type: ignore
+    process_data()

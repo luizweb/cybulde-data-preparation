@@ -1,14 +1,15 @@
-from typing import Any, Optional
-import yaml
 import logging
 import logging.config
 
+from typing import Any, Optional
+
 import hydra
+import yaml
+
 from hydra.types import TaskFunction
 from omegaconf import DictConfig, OmegaConf
 
 from cybulde.config_schemas import data_processing_config_schema
-
 
 
 def get_config(config_path: str, config_name: str) -> TaskFunction:
