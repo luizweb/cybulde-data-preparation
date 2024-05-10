@@ -21,7 +21,7 @@ class DaskClusterConfig:
 @dataclass
 class LocalDaskClusterConfig(DaskClusterConfig):
     _target_: str = "dask.distributed.LocalCluster"
-    memory_limit: str = "4 GiB"#"auto"
+    memory_limit: str = "4 GiB"  # "auto"
     processes: bool = True
     threads_per_worker: int = 1
     scheduler_port: int = 8786
